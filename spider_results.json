@@ -1,0 +1,20 @@
+{
+  "stats": {
+    "total_urls_visited": 1,
+    "html_files_found": 4,
+    "j_to_w_files_found": 0,
+    "errors": 0,
+    "start_time": "2025-06-21 12:46:55.647052",
+    "end_time": "2025-06-21 12:46:56.254119"
+  },
+  "html_files": [
+    "https://sanand0.github.io/tdsdata/crawl_html/hospital/history.html",
+    "https://sanand0.github.io/tdsdata/crawl_html/husband.html",
+    "https://sanand0.github.io/tdsdata/crawl_html/investment/both.html",
+    "https://sanand0.github.io/tdsdata/crawl_html/involve.html"
+  ],
+  "j_to_w_files": [],
+  "visited_urls": [
+    "https://sanand0.github.io/tdsdata/crawl_html/"
+  ]
+}
