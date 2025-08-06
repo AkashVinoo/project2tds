@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -16,40 +15,69 @@ lib64/
 parts/
 sdist/
 var/
+wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Virtual Environment
+# Virtual environments
+.env
+.venv
+env/
 venv/
 ENV/
+env.bak/
+venv.bak/
 
 # IDE
-.idea/
 .vscode/
+.idea/
 *.swp
 *.swo
-
-# Misc
-.DS_Store
-
-# Project specific
-uploads/
-logs/
-*.log
-auth_config.json
-*.png
-*.jpg
-*.jpeg
-*.webp
-*.sqlite
-*.db
+*~
 
 # OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Model files
-*.pt
-*.pth
-*.ckpt
-*.bin 
+# Logs
+*.log
+logs/
+
+# Data files
+*.csv
+*.json
+*.xlsx
+*.pdf
+*.mp3
+*.txt
+!requirements.txt
+!README*.md
+!*.py
+
+# Temporary files
+*.tmp
+*.temp
+test_*.txt
+simple_test_*.txt
+debug_*.py
+
+# ngrok
+ngrok.exe
+ngrok.yml
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Large data directories
+data/
+uploads/
+s-anand.net-May-2024/
+s-anand.net-May-2024~/ 

@@ -162,6 +162,9 @@ class DataAnalystAgent:
         """Handle count-based questions"""
         question_lower = question.lower()
         
+        # Create a copy to avoid modifying original
+        df_work = df.copy()
+        
         # Extract conditions from question
         conditions = []
         
@@ -178,9 +181,13 @@ class DataAnalystAgent:
                 amount *= 1e3
             
             # Find the column that might contain this data
-            for col in df.columns:
+            for col in df_work.columns:
                 if any(word in col.lower() for word in ['gross', 'revenue', 'amount', 'price', 'cost']):
-                    conditions.append(f"df['{col}'] >= {amount}")
+                    # Clean the column first
+                    df_work = self.clean_numeric_column(df_work, col)
+                    # Create condition mask
+                    mask = df_work[col] >= amount
+                    conditions.append(mask)
                     break
         
         # Look for year conditions
@@ -189,31 +196,41 @@ class DataAnalystAgent:
         for time_word, year in year_matches:
             year = int(year)
             # Find year column
-            for col in df.columns:
+            for col in df_work.columns:
                 if 'year' in col.lower():
+                    # Clean the column first
+                    df_work = self.clean_numeric_column(df_work, col)
+                    # Create condition mask
                     if time_word == 'before':
-                        conditions.append(f"df['{col}'] < {year}")
+                        mask = df_work[col] < year
                     elif time_word == 'after':
-                        conditions.append(f"df['{col}'] > {year}")
+                        mask = df_work[col] > year
                     else:
-                        conditions.append(f"df['{col}'] == {year}")
+                        mask = df_work[col] == year
+                    conditions.append(mask)
                     break
         
         # Apply conditions
         if conditions:
-            mask = eval(' & '.join(conditions))
-            return int(mask.sum())
+            # Combine all conditions with AND
+            final_mask = conditions[0]
+            for condition in conditions[1:]:
+                final_mask = final_mask & condition
+            return int(final_mask.sum())
         else:
-            return len(df)
+            return len(df_work)
     
     def handle_correlation_question(self, df: pd.DataFrame, question: str) -> float:
         """Handle correlation questions"""
+        # Create a copy to avoid modifying original
+        df_work = df.copy()
+        
         # Extract column names from question
         words = question.lower().split()
         columns = []
         
         for word in words:
-            for col in df.columns:
+            for col in df_work.columns:
                 if word in col.lower():
                     columns.append(col)
                     break
@@ -221,21 +238,29 @@ class DataAnalystAgent:
         if len(columns) >= 2:
             # Clean numeric columns
             for col in columns:
-                df = self.clean_numeric_column(df, col)
+                df_work = self.clean_numeric_column(df_work, col)
+            
+            # Drop rows with NaN values in both columns
+            df_clean = df_work[columns].dropna()
+            
+            if len(df_clean) < 2:
+                return 0.0
             
             # Calculate correlation
-            correlation = df[columns[0]].corr(df[columns[1]])
+            correlation = df_clean[columns[0]].corr(df_clean[columns[1]])
             return float(correlation) if not pd.isna(correlation) else 0.0
         else:
             return 0.0
     
     def handle_temporal_question(self, df: pd.DataFrame, question: str) -> str:
         """Handle temporal questions (earliest, latest, etc.)"""
+        # Create a copy to avoid modifying original
+        df_work = df.copy()
         question_lower = question.lower()
         
         # Find the target column (usually title or name)
         target_col = None
-        for col in df.columns:
+        for col in df_work.columns:
             if any(word in col.lower() for word in ['title', 'name', 'film', 'movie']):
                 target_col = col
                 break
@@ -245,7 +270,7 @@ class DataAnalystAgent:
         
         # Find date/time column
         date_col = None
-        for col in df.columns:
+        for col in df_work.columns:
             if any(word in col.lower() for word in ['year', 'date', 'time']):
                 date_col = col
                 break
@@ -254,18 +279,24 @@ class DataAnalystAgent:
             return "Date column not found"
         
         # Clean date column
-        df = self.clean_numeric_column(df, date_col)
+        df_work = self.clean_numeric_column(df_work, date_col)
+        
+        # Drop rows with NaN values in date column
+        df_clean = df_work.dropna(subset=[date_col])
+        
+        if len(df_clean) == 0:
+            return "No valid data found"
         
         # Find earliest/latest
         if 'earliest' in question_lower or 'first' in question_lower:
-            idx = df[date_col].idxmin()
+            idx = df_clean[date_col].idxmin()
         else:
-            idx = df[date_col].idxmax()
+            idx = df_clean[date_col].idxmax()
         
         if pd.isna(idx):
             return "No valid data found"
         
-        return str(df.loc[idx, target_col])
+        return str(df_clean.loc[idx, target_col])
     
     def handle_statistical_question(self, df: pd.DataFrame, question: str) -> float:
         """Handle statistical questions"""
