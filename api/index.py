@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
 Data Analyst Agent for Vercel Deployment
-Optimized for serverless environment with 3-minute timeout
+Simplified version for better compatibility
 """
 
 import base64
 import io
 import json
 import logging
-import os
 import re
 import time
 from typing import Any, List, Optional
@@ -22,7 +21,6 @@ from bs4 import BeautifulSoup
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,59 +41,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class VercelDataAnalyzer:
-    """Data analysis class optimized for Vercel serverless environment"""
+class SimpleDataAnalyzer:
+    """Simplified data analysis class for Vercel"""
     
     def __init__(self):
         self.session = requests.Session()
-        # Set shorter timeouts for serverless environment
         self.session.timeout = 25
     
     def scrape_wikipedia_table(self, url: str) -> pd.DataFrame:
-        """Scrape data from Wikipedia tables with optimized performance"""
+        """Scrape data from Wikipedia tables"""
         try:
             response = self.session.get(url, timeout=20)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Find tables - prioritize wikitable class
             tables = soup.find_all('table', {'class': 'wikitable'})
+            
             if not tables:
                 tables = soup.find_all('table')
             
             if not tables:
                 raise ValueError("No tables found on the page")
             
-            # Convert tables to DataFrames - limit to first few tables for performance
-            dataframes = []
-            for table in tables[:3]:  # Limit to first 3 tables
-                try:
-                    df = pd.read_html(str(table))[0]
-                    dataframes.append(df)
-                except Exception as e:
-                    logger.warning(f"Failed to parse table: {e}")
-                    continue
-            
-            if not dataframes:
-                raise ValueError("No valid tables could be parsed")
-            
-            # Return the largest table (usually the main one)
-            return max(dataframes, key=len)
+            # Try to parse the first table
+            try:
+                df = pd.read_html(str(tables[0]))[0]
+                return df
+            except Exception as e:
+                logger.error(f"Failed to parse table: {e}")
+                raise ValueError("Could not parse table data")
             
         except Exception as e:
             logger.error(f"Error scraping Wikipedia: {e}")
             raise
     
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean and preprocess data efficiently"""
+        """Clean and preprocess data"""
         # Remove completely empty rows and columns
         df = df.dropna(how='all').dropna(axis=1, how='all')
         
-        # Convert numeric columns efficiently
+        # Convert numeric columns
         for col in df.columns:
             try:
-                # Try to convert to numeric, handling currency symbols
                 df[col] = pd.to_numeric(df[col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
             except:
                 pass
@@ -103,7 +90,7 @@ class VercelDataAnalyzer:
         return df
     
     def analyze_data(self, df: pd.DataFrame, questions: List[str]) -> List[Any]:
-        """Analyze data and answer questions efficiently"""
+        """Analyze data and answer questions"""
         results = []
         
         for question in questions:
@@ -145,9 +132,8 @@ class VercelDataAnalyzer:
         
         return results
     
-    def create_scatterplot(self, df: pd.DataFrame, x_col: str, y_col: str, 
-                          regression: bool = True) -> str:
-        """Create a scatterplot with optional regression line - optimized for size"""
+    def create_scatterplot(self, df: pd.DataFrame, x_col: str, y_col: str) -> str:
+        """Create a scatterplot with regression line"""
         try:
             # Find numeric columns if specific columns not found
             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -160,38 +146,29 @@ class VercelDataAnalyzer:
             if x_col not in df.columns or y_col not in df.columns:
                 raise ValueError(f"Columns {x_col} or {y_col} not found")
             
-            # Create the plot with smaller size for faster processing
+            # Create the plot
             fig, ax = plt.subplots(figsize=(8, 5))
             
             # Scatter plot
             ax.scatter(df[x_col], df[y_col], alpha=0.6, s=20)
             
-            # Add regression line if requested
-            if regression:
-                z = np.polyfit(df[x_col], df[y_col], 1)
-                p = np.poly1d(z)
-                ax.plot(df[x_col], p(df[x_col]), "r--", alpha=0.8, linewidth=2)
+            # Add regression line
+            z = np.polyfit(df[x_col], df[y_col], 1)
+            p = np.poly1d(z)
+            ax.plot(df[x_col], p(df[x_col]), "r--", alpha=0.8, linewidth=2)
             
             # Labels and title
             ax.set_xlabel(x_col)
             ax.set_ylabel(y_col)
             ax.set_title(f'{y_col} vs {x_col}')
-            
-            # Add grid
             ax.grid(True, alpha=0.3)
             
-            # Convert to base64 with lower DPI for smaller file size
-            canvas = FigureCanvas(fig)
-            canvas.draw()
-            
-            # Get the image data
+            # Convert to base64
             img_data = io.BytesIO()
             fig.savefig(img_data, format='png', dpi=80, bbox_inches='tight')
             img_data.seek(0)
             
-            # Encode to base64
             img_base64 = base64.b64encode(img_data.getvalue()).decode()
-            
             plt.close(fig)
             
             return f"data:image/png;base64,{img_base64}"
@@ -201,7 +178,7 @@ class VercelDataAnalyzer:
             raise
 
 # Initialize the data analyzer
-analyzer = VercelDataAnalyzer()
+analyzer = SimpleDataAnalyzer()
 
 @app.get("/health")
 async def health_check():
@@ -215,14 +192,7 @@ async def analyze_data(
     image_file: Optional[UploadFile] = File(None, description="Image file (optional)")
 ):
     """
-    Main endpoint for data analysis - optimized for Vercel
-    
-    Accepts:
-    - questions.txt: Always required, contains the analysis questions
-    - Additional files: Optional data files, images, etc.
-    
-    Returns:
-    - JSON array with answers to the questions
+    Main endpoint for data analysis
     """
     try:
         start_time = time.time()
@@ -230,10 +200,6 @@ async def analyze_data(
         # Read the questions
         questions_content = await questions.read()
         questions_text = questions_content.decode('utf-8')
-        
-        # Handle the case where the file might be named differently
-        if questions.filename != "questions.txt":
-            logger.info(f"Questions file received as: {questions.filename}")
         
         logger.info(f"Received analysis request: {questions_text[:200]}...")
         
@@ -271,7 +237,7 @@ async def analyze_data(
         raise HTTPException(status_code=500, detail=str(e))
 
 async def handle_wikipedia_analysis(task_description: str, questions: List[str]) -> List[Any]:
-    """Handle Wikipedia scraping analysis - optimized for Vercel"""
+    """Handle Wikipedia scraping analysis"""
     # Extract URL from task description
     url_match = re.search(r'https://[^\s]+', task_description)
     if not url_match:
@@ -292,7 +258,7 @@ async def handle_wikipedia_analysis(task_description: str, questions: List[str])
     for i, question in enumerate(questions):
         if "scatterplot" in question.lower() and "rank" in question.lower() and "peak" in question.lower():
             try:
-                plot_data_uri = analyzer.create_scatterplot(df, "Rank", "Peak", regression=True)
+                plot_data_uri = analyzer.create_scatterplot(df, "Rank", "Peak")
                 results[i] = plot_data_uri
             except Exception as e:
                 logger.error(f"Error creating plot: {e}")
@@ -303,11 +269,10 @@ async def handle_wikipedia_analysis(task_description: str, questions: List[str])
 async def handle_generic_analysis(task_description: str, questions: List[str], 
                                 data_file: Optional[UploadFile], 
                                 image_file: Optional[UploadFile]) -> List[Any]:
-    """Handle generic data analysis - optimized for Vercel"""
+    """Handle generic data analysis"""
     results = []
     
     # Process uploaded files if any
-    data_info = ""
     df = None
     
     if data_file:
@@ -323,12 +288,10 @@ async def handle_generic_analysis(task_description: str, questions: List[str],
                 df = pd.read_json(io.BytesIO(content))
             
             if df is not None:
-                data_info = f"Data shape: {df.shape}\nColumns: {list(df.columns)}\nSample data:\n{df.head()}"
                 df = analyzer.clean_data(df)
         
         except Exception as e:
             logger.error(f"Error processing data file: {e}")
-            data_info = f"Error processing data file: {str(e)}"
     
     # Analyze each question
     for question in questions:
