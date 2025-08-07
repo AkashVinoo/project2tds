@@ -6,7 +6,7 @@ app = FastAPI()
 
 @app.get("/")
 def home():
-    return {"status": "OK", "message": "FastAPI app is running on Vercel!"}
+    return {"message": "Vercel is working and FastAPI is live!"}
 
 @app.post("/api/")
 async def analyze(question_file: UploadFile = File(...), attachments: list[UploadFile] = File(default=[])):
