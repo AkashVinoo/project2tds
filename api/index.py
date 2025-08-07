@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Data Analyst Agent for Vercel Deployment
-Simplified version for better compatibility
+Minimal version for maximum compatibility
 """
 
 import base64
@@ -41,144 +41,134 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class SimpleDataAnalyzer:
-    """Simplified data analysis class for Vercel"""
-    
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.timeout = 25
-    
-    def scrape_wikipedia_table(self, url: str) -> pd.DataFrame:
-        """Scrape data from Wikipedia tables"""
+def scrape_wikipedia_table(url: str) -> pd.DataFrame:
+    """Scrape data from Wikipedia tables"""
+    try:
+        response = requests.get(url, timeout=20)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        tables = soup.find_all('table', {'class': 'wikitable'})
+        
+        if not tables:
+            tables = soup.find_all('table')
+        
+        if not tables:
+            raise ValueError("No tables found on the page")
+        
+        # Try to parse the first table
         try:
-            response = self.session.get(url, timeout=20)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            tables = soup.find_all('table', {'class': 'wikitable'})
-            
-            if not tables:
-                tables = soup.find_all('table')
-            
-            if not tables:
-                raise ValueError("No tables found on the page")
-            
-            # Try to parse the first table
-            try:
-                df = pd.read_html(str(tables[0]))[0]
-                return df
-            except Exception as e:
-                logger.error(f"Failed to parse table: {e}")
-                raise ValueError("Could not parse table data")
-            
+            df = pd.read_html(str(tables[0]))[0]
+            return df
         except Exception as e:
-            logger.error(f"Error scraping Wikipedia: {e}")
-            raise
+            logger.error(f"Failed to parse table: {e}")
+            raise ValueError("Could not parse table data")
+        
+    except Exception as e:
+        logger.error(f"Error scraping Wikipedia: {e}")
+        raise
+
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean and preprocess data"""
+    # Remove completely empty rows and columns
+    df = df.dropna(how='all').dropna(axis=1, how='all')
     
-    def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean and preprocess data"""
-        # Remove completely empty rows and columns
-        df = df.dropna(how='all').dropna(axis=1, how='all')
-        
-        # Convert numeric columns
-        for col in df.columns:
-            try:
-                df[col] = pd.to_numeric(df[col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
-            except:
-                pass
-        
-        return df
+    # Convert numeric columns
+    for col in df.columns:
+        try:
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
+        except:
+            pass
     
-    def analyze_data(self, df: pd.DataFrame, questions: List[str]) -> List[Any]:
-        """Analyze data and answer questions"""
-        results = []
-        
-        for question in questions:
-            try:
-                if "correlation" in question.lower():
-                    # Find numeric columns for correlation
-                    numeric_cols = df.select_dtypes(include=[np.number]).columns
-                    if len(numeric_cols) >= 2:
-                        corr = df[numeric_cols].corr().iloc[0, 1]
-                        results.append(corr)
-                    else:
-                        results.append("Insufficient numeric data for correlation")
-                
-                elif "count" in question.lower() or "how many" in question.lower():
-                    # Handle counting questions
-                    if "before 2000" in question.lower():
-                        if 'Year' in df.columns:
-                            count = len(df[df['Year'] < 2000])
-                            results.append(count)
-                        else:
-                            results.append("Year column not found")
-                    else:
-                        results.append("Question not understood")
-                
-                elif "earliest" in question.lower() or "first" in question.lower():
-                    # Handle temporal questions
+    return df
+
+def analyze_data(df: pd.DataFrame, questions: List[str]) -> List[Any]:
+    """Analyze data and answer questions"""
+    results = []
+    
+    for question in questions:
+        try:
+            if "correlation" in question.lower():
+                # Find numeric columns for correlation
+                numeric_cols = df.select_dtypes(include=[np.number]).columns
+                if len(numeric_cols) >= 2:
+                    corr = df[numeric_cols].corr().iloc[0, 1]
+                    results.append(corr)
+                else:
+                    results.append("Insufficient numeric data for correlation")
+            
+            elif "count" in question.lower() or "how many" in question.lower():
+                # Handle counting questions
+                if "before 2000" in question.lower():
                     if 'Year' in df.columns:
-                        earliest = df.loc[df['Year'].idxmin()]
-                        results.append(earliest['Title'] if 'Title' in df.columns else str(earliest))
+                        count = len(df[df['Year'] < 2000])
+                        results.append(count)
                     else:
                         results.append("Year column not found")
-                
                 else:
                     results.append("Question not understood")
-                    
-            except Exception as e:
-                logger.error(f"Error analyzing question '{question}': {e}")
-                results.append(f"Error: {str(e)}")
-        
-        return results
-    
-    def create_scatterplot(self, df: pd.DataFrame, x_col: str, y_col: str) -> str:
-        """Create a scatterplot with regression line"""
-        try:
-            # Find numeric columns if specific columns not found
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
             
-            if x_col not in df.columns and len(numeric_cols) >= 1:
-                x_col = numeric_cols[0]
-            if y_col not in df.columns and len(numeric_cols) >= 2:
-                y_col = numeric_cols[1]
+            elif "earliest" in question.lower() or "first" in question.lower():
+                # Handle temporal questions
+                if 'Year' in df.columns:
+                    earliest = df.loc[df['Year'].idxmin()]
+                    results.append(earliest['Title'] if 'Title' in df.columns else str(earliest))
+                else:
+                    results.append("Year column not found")
             
-            if x_col not in df.columns or y_col not in df.columns:
-                raise ValueError(f"Columns {x_col} or {y_col} not found")
-            
-            # Create the plot
-            fig, ax = plt.subplots(figsize=(8, 5))
-            
-            # Scatter plot
-            ax.scatter(df[x_col], df[y_col], alpha=0.6, s=20)
-            
-            # Add regression line
-            z = np.polyfit(df[x_col], df[y_col], 1)
-            p = np.poly1d(z)
-            ax.plot(df[x_col], p(df[x_col]), "r--", alpha=0.8, linewidth=2)
-            
-            # Labels and title
-            ax.set_xlabel(x_col)
-            ax.set_ylabel(y_col)
-            ax.set_title(f'{y_col} vs {x_col}')
-            ax.grid(True, alpha=0.3)
-            
-            # Convert to base64
-            img_data = io.BytesIO()
-            fig.savefig(img_data, format='png', dpi=80, bbox_inches='tight')
-            img_data.seek(0)
-            
-            img_base64 = base64.b64encode(img_data.getvalue()).decode()
-            plt.close(fig)
-            
-            return f"data:image/png;base64,{img_base64}"
-            
+            else:
+                results.append("Question not understood")
+                
         except Exception as e:
-            logger.error(f"Error creating scatterplot: {e}")
-            raise
+            logger.error(f"Error analyzing question '{question}': {e}")
+            results.append(f"Error: {str(e)}")
+    
+    return results
 
-# Initialize the data analyzer
-analyzer = SimpleDataAnalyzer()
+def create_scatterplot(df: pd.DataFrame, x_col: str, y_col: str) -> str:
+    """Create a scatterplot with regression line"""
+    try:
+        # Find numeric columns if specific columns not found
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if x_col not in df.columns and len(numeric_cols) >= 1:
+            x_col = numeric_cols[0]
+        if y_col not in df.columns and len(numeric_cols) >= 2:
+            y_col = numeric_cols[1]
+        
+        if x_col not in df.columns or y_col not in df.columns:
+            raise ValueError(f"Columns {x_col} or {y_col} not found")
+        
+        # Create the plot
+        fig, ax = plt.subplots(figsize=(8, 5))
+        
+        # Scatter plot
+        ax.scatter(df[x_col], df[y_col], alpha=0.6, s=20)
+        
+        # Add regression line
+        z = np.polyfit(df[x_col], df[y_col], 1)
+        p = np.poly1d(z)
+        ax.plot(df[x_col], p(df[x_col]), "r--", alpha=0.8, linewidth=2)
+        
+        # Labels and title
+        ax.set_xlabel(x_col)
+        ax.set_ylabel(y_col)
+        ax.set_title(f'{y_col} vs {x_col}')
+        ax.grid(True, alpha=0.3)
+        
+        # Convert to base64
+        img_data = io.BytesIO()
+        fig.savefig(img_data, format='png', dpi=80, bbox_inches='tight')
+        img_data.seek(0)
+        
+        img_base64 = base64.b64encode(img_data.getvalue()).decode()
+        plt.close(fig)
+        
+        return f"data:image/png;base64,{img_base64}"
+        
+    except Exception as e:
+        logger.error(f"Error creating scatterplot: {e}")
+        raise
 
 @app.get("/health")
 async def health_check():
@@ -186,7 +176,7 @@ async def health_check():
     return {"status": "healthy", "service": "Data Analyst Agent", "deployment": "vercel"}
 
 @app.post("/api/")
-async def analyze_data(
+async def analyze_data_endpoint(
     questions: UploadFile = File(..., description="Questions file (always required)"),
     data_file: Optional[UploadFile] = File(None, description="Data file (optional)"),
     image_file: Optional[UploadFile] = File(None, description="Image file (optional)")
@@ -246,19 +236,19 @@ async def handle_wikipedia_analysis(task_description: str, questions: List[str])
     url = url_match.group(0)
     
     # Scrape the data
-    df = analyzer.scrape_wikipedia_table(url)
-    df = analyzer.clean_data(df)
+    df = scrape_wikipedia_table(url)
+    df = clean_data(df)
     
     logger.info(f"Scraped data shape: {df.shape}")
     
     # Analyze the questions
-    results = analyzer.analyze_data(df, questions)
+    results = analyze_data(df, questions)
     
     # Handle visualization question
     for i, question in enumerate(questions):
         if "scatterplot" in question.lower() and "rank" in question.lower() and "peak" in question.lower():
             try:
-                plot_data_uri = analyzer.create_scatterplot(df, "Rank", "Peak")
+                plot_data_uri = create_scatterplot(df, "Rank", "Peak")
                 results[i] = plot_data_uri
             except Exception as e:
                 logger.error(f"Error creating plot: {e}")
@@ -288,7 +278,7 @@ async def handle_generic_analysis(task_description: str, questions: List[str],
                 df = pd.read_json(io.BytesIO(content))
             
             if df is not None:
-                df = analyzer.clean_data(df)
+                df = clean_data(df)
         
         except Exception as e:
             logger.error(f"Error processing data file: {e}")
@@ -309,7 +299,7 @@ async def handle_generic_analysis(task_description: str, questions: List[str],
                 # Handle plotting
                 numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
                 if len(numeric_cols) >= 2:
-                    plot_data_uri = analyzer.create_scatterplot(df, numeric_cols[0], numeric_cols[1])
+                    plot_data_uri = create_scatterplot(df, numeric_cols[0], numeric_cols[1])
                     results.append(plot_data_uri)
                 else:
                     results.append("Insufficient numeric data for plotting")
